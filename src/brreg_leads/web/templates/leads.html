@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="mb-6">
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+    <div class="bg-white border border-slate-200 rounded p-3">
+      <div class="text-xs text-slate-500">Total leads</div>
+      <div class="text-2xl font-semibold">{{ total }}</div>
+    </div>
+    {% for c in all_cohorts %}
+    <div class="bg-white border border-slate-200 rounded p-3">
+      <div class="text-xs"><span class="badge b-{{ c }}">{{ c }}</span></div>
+      <div class="text-2xl font-semibold">{{ cohort_counts.get(c, 0) }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <form method="get" class="bg-white border border-slate-200 rounded p-3 flex flex-wrap gap-3 items-end">
+    <label class="text-xs text-slate-600">Cohort
+      <select name="cohort" class="block border rounded px-2 py-1 text-sm">
+        <option value="">All</option>
+        {% for c in all_cohorts %}<option value="{{ c }}" {% if filters.cohort == c %}selected{% endif %}>{{ c }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="text-xs text-slate-600">Status
+      <select name="status" class="block border rounded px-2 py-1 text-sm">
+        <option value="">All</option>
+        {% for s in all_statuses %}<option value="{{ s }}" {% if filters.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="text-xs text-slate-600">Kommune
+      <select name="kommune" class="block border rounded px-2 py-1 text-sm">
+        <option value="">All</option>
+        {% for k in kommuner %}<option value="{{ k }}" {% if filters.kommune == k %}selected{% endif %}>{{ k }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="text-xs text-slate-600">Næring prefix
+      <input type="text" name="naering_prefix" value="{{ filters.naering_prefix }}" class="block border rounded px-2 py-1 text-sm w-24" placeholder="47.">
+    </label>
+    <label class="text-xs text-slate-600">Search
+      <input type="text" name="search" value="{{ filters.search }}" class="block border rounded px-2 py-1 text-sm w-48" placeholder="name or orgnr">
+    </label>
+    <label class="text-xs text-slate-600">Limit
+      <input type="number" name="limit" value="{{ filters.limit }}" class="block border rounded px-2 py-1 text-sm w-20">
+    </label>
+    <button type="submit" class="bg-slate-900 text-white text-sm px-3 py-1 rounded">Filter</button>
+    <a href="/export.csv?cohort={{ filters.cohort }}&status={{ filters.status }}&kommune={{ filters.kommune }}&naering_prefix={{ filters.naering_prefix }}&search={{ filters.search }}"
+       class="text-sm text-blue-700 underline ml-auto">Export CSV</a>
+  </form>
+</section>
+
+<table class="w-full text-sm bg-white border border-slate-200 rounded overflow-hidden">
+  <thead class="bg-slate-100 text-slate-600 text-left">
+    <tr>
+      <th class="px-3 py-2">Navn</th>
+      <th class="px-3 py-2">Orgnr</th>
+      <th class="px-3 py-2">Kommune</th>
+      <th class="px-3 py-2">Næring</th>
+      <th class="px-3 py-2">Regdato</th>
+      <th class="px-3 py-2">Kontakt</th>
+      <th class="px-3 py-2">Cohorts</th>
+      <th class="px-3 py-2">Score</th>
+      <th class="px-3 py-2">Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for l in leads %}
+    <tr class="border-t hover:bg-slate-50">
+      <td class="px-3 py-2"><a class="text-blue-700 hover:underline font-medium" href="/lead/{{ l.orgnr }}">{{ l.navn }}</a></td>
+      <td class="px-3 py-2 font-mono text-xs">{{ l.orgnr }}</td>
+      <td class="px-3 py-2">{{ l.kommune_navn or l.kommunenummer or '' }}</td>
+      <td class="px-3 py-2"><span class="font-mono text-xs">{{ l.naeringskode1_kode or '' }}</span> <span class="text-slate-500">{{ l.naeringskode1_beskrivelse or '' }}</span></td>
+      <td class="px-3 py-2 text-xs">{{ l.registreringsdato or '' }}</td>
+      <td class="px-3 py-2 text-xs">
+        {% if l.epost %}<div>{{ l.epost }}</div>{% endif %}
+        {% if l.telefon %}<div>{{ l.telefon }}</div>{% endif %}
+        {% if l.hjemmeside %}<div class="text-emerald-700">{{ l.hjemmeside }}</div>{% else %}<div class="text-rose-700">no website</div>{% endif %}
+      </td>
+      <td class="px-3 py-2">
+        {% for c in l.cohorts %}<span class="badge b-{{ c }} mr-1">{{ c }}</span>{% endfor %}
+      </td>
+      <td class="px-3 py-2 font-semibold">{{ l.score }}</td>
+      <td class="px-3 py-2 text-xs">{{ l.status }}</td>
+    </tr>
+    {% endfor %}
+    {% if not leads %}
+    <tr><td colspan="9" class="px-3 py-8 text-center text-slate-500">No leads match the current filters.</td></tr>
+    {% endif %}
+  </tbody>
+</table>
+{% endblock %}

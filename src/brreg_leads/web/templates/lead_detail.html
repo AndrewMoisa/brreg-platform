@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block content %}
+<a href="/" class="text-sm text-blue-700 hover:underline">&larr; back</a>
+<header class="my-4">
+  <h1 class="text-2xl font-semibold">{{ lead.navn }}</h1>
+  <div class="text-sm text-slate-500 font-mono">{{ lead.orgnr }} · {{ lead.organisasjonsform }} · registered {{ lead.registreringsdato or '—' }}</div>
+  <div class="mt-2">
+    {% for c in lead.cohorts %}<span class="badge b-{{ c }} mr-1">{{ c }}</span>{% endfor %}
+    <span class="ml-2 text-sm text-slate-500">score {{ lead.score }}</span>
+  </div>
+</header>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+  <section class="bg-white border border-slate-200 rounded p-4">
+    <h2 class="font-semibold mb-2">Contact</h2>
+    <dl class="text-sm grid grid-cols-3 gap-y-1">
+      <dt class="text-slate-500">E-post</dt><dd class="col-span-2">{{ lead.epost or '—' }}</dd>
+      <dt class="text-slate-500">Telefon</dt><dd class="col-span-2">{{ lead.telefon or '—' }}</dd>
+      <dt class="text-slate-500">Mobil</dt><dd class="col-span-2">{{ lead.mobil or '—' }}</dd>
+      <dt class="text-slate-500">Hjemmeside</dt><dd class="col-span-2">{% if lead.hjemmeside %}<a href="//{{ lead.hjemmeside }}" target="_blank" class="text-blue-700 hover:underline">{{ lead.hjemmeside }}</a>{% else %}<span class="text-rose-700">— none —</span>{% endif %}</dd>
+      <dt class="text-slate-500">Ansatte</dt><dd class="col-span-2">{{ lead.antall_ansatte if lead.antall_ansatte is not none else '—' }}</dd>
+    </dl>
+  </section>
+
+  <section class="bg-white border border-slate-200 rounded p-4">
+    <h2 class="font-semibold mb-2">Address & industry</h2>
+    <dl class="text-sm grid grid-cols-3 gap-y-1">
+      <dt class="text-slate-500">Forretning</dt>
+      <dd class="col-span-2">
+        {% set f = lead.forretningsadresse %}
+        {% if f.adresse %}{{ f.adresse|join(', ') }}<br>{% endif %}
+        {{ f.postnummer or '' }} {{ f.poststed or '' }}<br>
+        {{ f.kommune or '' }} ({{ f.kommunenummer or '' }})
+      </dd>
+      <dt class="text-slate-500">Næring</dt>
+      <dd class="col-span-2 font-mono text-xs">{{ lead.naeringskode1_kode or '—' }} <span class="text-slate-600">{{ lead.naeringskode1_beskrivelse or '' }}</span></dd>
+    </dl>
+  </section>
+</div>
+
+<section class="bg-white border border-slate-200 rounded p-4 mb-6">
+  <h2 class="font-semibold mb-2">Status</h2>
+  <form method="post" action="/lead/{{ lead.orgnr }}/status" class="flex flex-col gap-2">
+    <div class="flex gap-2 items-center">
+      <select name="status" class="border rounded px-2 py-1 text-sm">
+        {% for s in all_statuses %}<option value="{{ s }}" {% if lead.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+      </select>
+      <span class="text-xs text-slate-500">Last contacted: {{ lead.last_contacted_at or '—' }}</span>
+    </div>
+    <textarea name="notes" rows="3" class="border rounded px-2 py-1 text-sm" placeholder="Notes...">{{ lead.notes or '' }}</textarea>
+    <button class="bg-slate-900 text-white text-sm px-3 py-1 rounded self-start">Save</button>
+  </form>
+</section>
+
+<section class="bg-white border border-slate-200 rounded p-4 mb-6">
+  <h2 class="font-semibold mb-2">Roles</h2>
+  {% if roller %}
+  <table class="w-full text-sm">
+    <thead class="text-slate-500 text-left text-xs uppercase">
+      <tr><th class="py-1">Type</th><th class="py-1">Person</th><th class="py-1">Fratrådt</th></tr>
+    </thead>
+    <tbody>
+      {% for r in roller %}
+      <tr class="border-t"><td class="py-1 font-mono text-xs">{{ r.rolle_type }}</td><td class="py-1">{{ r.person_navn }}</td><td class="py-1 text-xs">{{ r.fra_dato or '' }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="text-sm text-slate-500">No roles fetched yet.</p>{% endif %}
+</section>
+
+<section class="bg-white border border-slate-200 rounded p-4">
+  <h2 class="font-semibold mb-2">Recent updates</h2>
+  {% if updates %}
+  <ul class="text-sm">
+    {% for u in updates %}<li class="border-t py-1 flex justify-between"><span class="font-mono text-xs">{{ u.dato }}</span><span>{{ u.endringstype or 'Ukjent' }}</span></li>{% endfor %}
+  </ul>
+  {% else %}<p class="text-sm text-slate-500">No updates recorded.</p>{% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Brreg Leads{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, sans-serif; }
+    .badge { display:inline-block; padding:.1rem .5rem; border-radius:.5rem; font-size:.75rem; font-weight:600; }
+    .b-no_website     { background:#fee2e2; color:#991b1b; }
+    .b-target_industry{ background:#dbeafe; color:#1e40af; }
+    .b-enk_conversion { background:#fef3c7; color:#92400e; }
+    .b-recently_moved { background:#dcfce7; color:#166534; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+  <header class="bg-white border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/" class="text-lg font-semibold">brreg leads</a>
+      <nav class="text-sm text-slate-500 space-x-4">
+        <span>Oslo + Akershus</span>
+      </nav>
+    </div>
+  </header>
+  <main class="max-w-7xl mx-auto px-4 py-6">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
