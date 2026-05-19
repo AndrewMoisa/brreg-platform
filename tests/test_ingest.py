@@ -101,6 +101,75 @@ def test_lazy_roller_skips_if_already_fetched(conn):
     assert fetched == 0
 
 
+def test_replay_oppdateringer_refetches_stranded_enks(conn):
+    """A seeded ENK with a stranded oppdateringer event newer than its
+    last_refreshed_at gets re-fetched; if the refetch reveals it's now deleted,
+    roller are pulled lazily."""
+    _insert_enhet(conn, "100000001", "ENK", kommune="0301")
+    conn.execute(
+        "UPDATE enheter SET last_refreshed_at = '2026-04-01' WHERE orgnr = ?",
+        ("100000001",),
+    )
+    conn.execute(
+        "INSERT INTO oppdateringer (oppdateringsid, orgnr, endringstype, dato) "
+        "VALUES (?, ?, ?, ?)",
+        (1, "100000001", "Ukjent", "2026-05-10"),
+    )
+
+    # Brreg now reports it as deleted
+    class RefetchingFakeClient(FakeClient):
+        def get_enhet(self, orgnr):
+            return {
+                "organisasjonsnummer": orgnr,
+                "navn": f"Test {orgnr}",
+                "organisasjonsform": {"kode": "ENK"},
+                "slettedato": "2026-05-10",
+                "forretningsadresse": {"kommunenummer": "0301", "kommune": "OSLO"},
+            }
+
+    client = RefetchingFakeClient({
+        "100000001": _roller_payload_for_innehaver("Ola", "Hansen"),
+    })
+    refetched, roller_added = ingest._replay_oppdateringer_for_kommune_enks(
+        client, conn, ["0301"]
+    )
+    assert refetched == 1
+    assert roller_added == 1
+
+    # After replay the entity is marked deleted and has its INNH role
+    row = conn.execute(
+        "SELECT slettedato FROM enheter WHERE orgnr = ?", ("100000001",)
+    ).fetchone()
+    assert row["slettedato"] == "2026-05-10"
+    role = conn.execute(
+        "SELECT rolle_type, person_navn FROM roller WHERE orgnr = ?", ("100000001",)
+    ).fetchone()
+    assert role["rolle_type"] == "INNH"
+
+
+def test_replay_skips_enks_already_refreshed_after_event(conn):
+    """If last_refreshed_at is newer than the event, no work is needed."""
+    _insert_enhet(conn, "100000001", "ENK", kommune="0301")
+    conn.execute(
+        "UPDATE enheter SET last_refreshed_at = '2026-05-15' WHERE orgnr = ?",
+        ("100000001",),
+    )
+    conn.execute(
+        "INSERT INTO oppdateringer (oppdateringsid, orgnr, endringstype, dato) "
+        "VALUES (?, ?, ?, ?)",
+        (1, "100000001", "Ukjent", "2026-05-10"),
+    )
+
+    client = FakeClient({})
+    # Need a get_enhet attribute to not error if accidentally called
+    client.get_enhet = lambda orgnr: pytest.fail("Should not refetch")  # type: ignore
+    refetched, roller_added = ingest._replay_oppdateringer_for_kommune_enks(
+        client, conn, ["0301"]
+    )
+    assert refetched == 0
+    assert roller_added == 0
+
+
 def test_end_to_end_match_after_lazy_fetch(conn):
     # Seeded active ENK that has now been re-fetched as deleted
     _insert_enhet(conn, "100000001", "ENK", slettedato="2026-05-10", kommune="0301")

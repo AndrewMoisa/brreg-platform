@@ -27,7 +27,35 @@ python -m brreg_leads seed-enk                       # one-shot, enables ENK→A
 required for ENK→AS conversion detection — without it, the matcher has
 nothing to anchor against. Roles for those ENKs are fetched **lazily**, only
 once an ENK appears as deleted in the daily `/oppdateringer` feed. Expect the
-seed to take a few minutes per kommune.
+seed to take ~9 minutes for all 10 kommuner.
+
+## Enrichment
+
+```powershell
+python -m brreg_leads enrich          # fill in contact info for leads we don't have it for yet
+python -m brreg_leads enrich --all    # re-enrich every lead
+```
+
+Brreg leaves `epost`/`telefon` empty for ~80% of new ASes. The enrichment
+table + dashboard plumbing is in place to surface contact info from a
+secondary source, with a "via <source>" badge when the value is non-Brreg.
+
+**Current source — proff.no — is unreliable.** proff.no is behind an AWS WAF
+JavaScript challenge, so a plain HTTP GET returns a challenge page instead of
+the company data. The parser correctly returns `source="none"` for these, so
+enrichment is currently a safe no-op — no false data, but also no hits.
+
+The schema, dashboard rendering, and CLI work for any source that returns
+plain HTML. To make enrichment actually populate, plug in one of:
+
+- **Hunter.io API** (50 free lookups/month, domain → email) — would need a
+  `HunterClient` and a `hunter` source label.
+- **Google Places API** (generous free tier, name+address → phone/website).
+- **Headless browser** for proff.no specifically (Playwright) — heavy but
+  works.
+
+The `enrichment` table already has a `source` column so multiple providers
+can coexist if you ever add more.
 
 ## Daily run
 

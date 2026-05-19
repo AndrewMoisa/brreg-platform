@@ -48,6 +48,20 @@
   </form>
 </section>
 
+<div class="mb-2 flex items-center justify-between text-sm">
+  <div class="text-slate-600">
+    Showing <span class="font-semibold">{{ leads|length }}</span> of
+    <span class="font-semibold">{{ filtered_total }}</span> leads matching filters
+    {% if filters.cohort or filters.status or filters.kommune or filters.naering_prefix or filters.search %}
+      <span class="text-slate-400">(of {{ total }} in DB)</span>
+    {% endif %}.
+  </div>
+  {% if is_truncated %}
+    <a href="?cohort={{ filters.cohort }}&status={{ filters.status }}&kommune={{ filters.kommune }}&naering_prefix={{ filters.naering_prefix }}&search={{ filters.search }}&limit={{ filtered_total }}"
+       class="text-blue-700 underline">Show all {{ filtered_total }}</a>
+  {% endif %}
+</div>
+
 <table class="w-full text-sm bg-white border border-slate-200 rounded overflow-hidden">
   <thead class="bg-slate-100 text-slate-600 text-left">
     <tr>
@@ -74,6 +88,7 @@
         {% if l.epost %}<div>{{ l.epost }}</div>{% endif %}
         {% if l.telefon %}<div>{{ l.telefon }}</div>{% endif %}
         {% if l.hjemmeside %}<div class="text-emerald-700">{{ l.hjemmeside }}</div>{% else %}<div class="text-rose-700">no website</div>{% endif %}
+        {% if l.contact_source == 'proff' %}<div class="text-[10px] text-amber-700 uppercase mt-0.5">via proff</div>{% endif %}
       </td>
       <td class="px-3 py-2">
         {% for c in l.cohorts %}<span class="badge b-{{ c }} mr-1">{{ c }}</span>{% endfor %}

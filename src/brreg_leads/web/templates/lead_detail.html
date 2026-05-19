@@ -14,10 +14,26 @@
   <section class="bg-white border border-slate-200 rounded p-4">
     <h2 class="font-semibold mb-2">Contact</h2>
     <dl class="text-sm grid grid-cols-3 gap-y-1">
-      <dt class="text-slate-500">E-post</dt><dd class="col-span-2">{{ lead.epost or '—' }}</dd>
-      <dt class="text-slate-500">Telefon</dt><dd class="col-span-2">{{ lead.telefon or '—' }}</dd>
+      <dt class="text-slate-500">E-post</dt>
+      <dd class="col-span-2">
+        {% if lead.epost %}{{ lead.epost }} <span class="text-[10px] text-slate-400 uppercase">brreg</span>
+        {% elif lead.enrich_epost %}{{ lead.enrich_epost }} <span class="text-[10px] text-amber-700 uppercase">via {{ lead.enrich_source }}</span>
+        {% else %}—{% endif %}
+      </dd>
+      <dt class="text-slate-500">Telefon</dt>
+      <dd class="col-span-2">
+        {% if lead.telefon %}{{ lead.telefon }} <span class="text-[10px] text-slate-400 uppercase">brreg</span>
+        {% elif lead.enrich_telefon %}{{ lead.enrich_telefon }} <span class="text-[10px] text-amber-700 uppercase">via {{ lead.enrich_source }}</span>
+        {% else %}—{% endif %}
+      </dd>
       <dt class="text-slate-500">Mobil</dt><dd class="col-span-2">{{ lead.mobil or '—' }}</dd>
-      <dt class="text-slate-500">Hjemmeside</dt><dd class="col-span-2">{% if lead.hjemmeside %}<a href="//{{ lead.hjemmeside }}" target="_blank" class="text-blue-700 hover:underline">{{ lead.hjemmeside }}</a>{% else %}<span class="text-rose-700">— none —</span>{% endif %}</dd>
+      <dt class="text-slate-500">Hjemmeside</dt>
+      <dd class="col-span-2">
+        {% set hjem = lead.hjemmeside or lead.enrich_hjemmeside %}
+        {% if hjem %}<a href="{{ hjem if hjem.startswith('http') else '//' ~ hjem }}" target="_blank" class="text-blue-700 hover:underline">{{ hjem }}</a>
+          {% if not lead.hjemmeside %}<span class="text-[10px] text-amber-700 uppercase">via {{ lead.enrich_source }}</span>{% endif %}
+        {% else %}<span class="text-rose-700">— none —</span>{% endif %}
+      </dd>
       <dt class="text-slate-500">Ansatte</dt><dd class="col-span-2">{{ lead.antall_ansatte if lead.antall_ansatte is not none else '—' }}</dd>
     </dl>
   </section>
@@ -40,16 +56,34 @@
 
 <section class="bg-white border border-slate-200 rounded p-4 mb-6">
   <h2 class="font-semibold mb-2">Status</h2>
-  <form method="post" action="/lead/{{ lead.orgnr }}/status" class="flex flex-col gap-2">
-    <div class="flex gap-2 items-center">
-      <select name="status" class="border rounded px-2 py-1 text-sm">
-        {% for s in all_statuses %}<option value="{{ s }}" {% if lead.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
-      </select>
-      <span class="text-xs text-slate-500">Last contacted: {{ lead.last_contacted_at or '—' }}</span>
-    </div>
-    <textarea name="notes" rows="3" class="border rounded px-2 py-1 text-sm" placeholder="Notes...">{{ lead.notes or '' }}</textarea>
-    <button class="bg-slate-900 text-white text-sm px-3 py-1 rounded self-start">Save</button>
+  <form method="post" action="/lead/{{ lead.orgnr }}/status" class="flex gap-2 items-center mb-2">
+    <select name="status" class="border rounded px-2 py-1 text-sm">
+      {% for s in all_statuses %}<option value="{{ s }}" {% if lead.status == s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+    <textarea name="notes" rows="1" class="border rounded px-2 py-1 text-sm flex-1" placeholder="Note (optional)..."></textarea>
+    <button class="bg-slate-900 text-white text-sm px-3 py-1 rounded">Save</button>
+    <span class="text-xs text-slate-500 ml-2">Last contacted: {{ lead.last_contacted_at or '—' }}</span>
   </form>
+</section>
+
+<section class="bg-white border border-slate-200 rounded p-4 mb-6">
+  <h2 class="font-semibold mb-2">Notes</h2>
+  <form method="post" action="/lead/{{ lead.orgnr }}/note" class="flex gap-2 mb-3">
+    <textarea name="body" rows="2" class="border rounded px-2 py-1 text-sm flex-1" placeholder="Add a note..."></textarea>
+    <button class="bg-slate-900 text-white text-sm px-3 py-1 rounded self-start">Add</button>
+  </form>
+  {% if notes %}
+  <ul class="text-sm divide-y divide-slate-100">
+    {% for n in notes %}
+    <li class="py-2 flex justify-between gap-3">
+      <span class="whitespace-pre-wrap">{{ n.body }}</span>
+      <span class="text-xs text-slate-400 font-mono shrink-0">{{ n.created_at[:16] }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-sm text-slate-500">No notes yet.</p>
+  {% endif %}
 </section>
 
 <section class="bg-white border border-slate-200 rounded p-4 mb-6">

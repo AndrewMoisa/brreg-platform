@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable
 
-from . import classify, matcher
-from .brreg_client import BrregClient
+from . import classify, enrich, matcher
+from .brreg_client import BrregClient, BrregPaginationLimit
 from .config import KOMMUNER
 from .db import connect, get_state, init_db, set_state
 
@@ -25,6 +25,7 @@ class IngestSummary:
     roller_fetched: int = 0
     leads_upserted: int = 0
     enk_conversions: int = 0
+    enriched: int = 0
 
 
 def _now_iso() -> str:
@@ -298,18 +299,112 @@ def _fetch_roller_for_deleted_enks(
     return fetched
 
 
-def seed_enk(kommuner: list[str] | None = None) -> int:
+def _replay_oppdateringer_for_kommune_enks(
+    client: BrregClient,
+    conn: sqlite3.Connection,
+    kommuner: list[str],
+) -> tuple[int, int]:
+    """Re-process /oppdateringer events already in the DB whose orgnr now belongs
+    to a seeded ENK in our target kommuner. Refetches each entity so the lazy-roller
+    hook can pick up newly-discovered deletions. Returns (refetched, roller_added)."""
+    if not kommuner:
+        return 0, 0
+    placeholders = ",".join("?" * len(kommuner))
+    rows = conn.execute(
+        f"""
+        SELECT DISTINCT e.orgnr
+        FROM enheter e
+        JOIN oppdateringer o ON o.orgnr = e.orgnr
+        WHERE e.organisasjonsform = 'ENK'
+          AND e.kommunenummer IN ({placeholders})
+          AND o.dato > e.last_refreshed_at
+        """,
+        kommuner,
+    ).fetchall()
+    orgnrs = [r["orgnr"] for r in rows]
+    for orgnr in orgnrs:
+        enhet = client.get_enhet(orgnr)
+        if enhet:
+            upsert_enhet(conn, enhet)
+    roller_added = _fetch_roller_for_deleted_enks(client, conn, orgnrs)
+    return len(orgnrs), roller_added
+
+
+def _generate_seed_buckets() -> list[tuple[str, str]]:
+    """Bucket registreringsdato ranges so no single Brreg /enheter call exceeds the
+    10000-offset cap. Coarse pre-2000 (historical ENKs are sparse), yearly 2000-2019,
+    monthly 2020+ (high registration volume in recent years for big kommuner)."""
+    from calendar import monthrange
+
+    buckets: list[tuple[str, str]] = []
+    for decade in range(1900, 2000, 10):
+        buckets.append((f"{decade}-01-01", f"{decade + 9}-12-31"))
+    for year in range(2000, 2020):
+        buckets.append((f"{year}-01-01", f"{year}-12-31"))
+    today = date.today()
+    for year in range(2020, today.year + 1):
+        for month in range(1, 13):
+            last_day = monthrange(year, month)[1]
+            since = f"{year}-{month:02d}-01"
+            until = f"{year}-{month:02d}-{last_day:02d}"
+            if since > today.isoformat():
+                break
+            buckets.append((since, until))
+    return buckets
+
+
+SEED_DATE_BUCKETS = _generate_seed_buckets()
+
+
+def _seed_kommune_with_partition(
+    client: BrregClient, conn: sqlite3.Connection, kommune: str
+) -> int:
+    try:
+        count = 0
+        for enhet in client.iter_active_by_kommune("ENK", kommune):
+            upsert_enhet(conn, enhet)
+            count += 1
+        return count
+    except BrregPaginationLimit:
+        log.info(
+            "Kommune %s exceeds 10k cap — partitioning by registreringsdato", kommune
+        )
+    count = 0
+    for since, until in SEED_DATE_BUCKETS:
+        try:
+            for enhet in client.iter_active_by_kommune(
+                "ENK", kommune, registered_from=since, registered_to=until
+            ):
+                upsert_enhet(conn, enhet)
+                count += 1
+        except BrregPaginationLimit:
+            log.warning(
+                "Bucket %s..%s for kommune %s still exceeds 10k — partial loss",
+                since,
+                until,
+                kommune,
+            )
+    return count
+
+
+def seed_enk(kommuner: list[str] | None = None) -> dict[str, int]:
     init_db()
     target_kommuner = list(kommuner or KOMMUNER)
     count = 0
     with connect() as conn, BrregClient() as client:
         for k in target_kommuner:
             log.info("Seeding active ENKs for kommune %s", k)
-            for enhet in client.iter_active_by_kommune("ENK", k):
-                upsert_enhet(conn, enhet)
-                count += 1
+            count += _seed_kommune_with_partition(client, conn, k)
+        log.info("Replaying stranded /oppdateringer events for seeded ENKs")
+        replay_refetched, replay_roller = _replay_oppdateringer_for_kommune_enks(
+            client, conn, target_kommuner
+        )
         set_state(conn, ENK_SEEDED_KEY, _now_iso())
-    return count
+    return {
+        "seeded": count,
+        "replay_refetched": replay_refetched,
+        "replay_roller": replay_roller,
+    }
 
 
 def run_ingest(
@@ -348,6 +443,12 @@ def run_ingest(
         for orgnr in new_as_orgnrs:
             roller = client.get_roller(orgnr)
             summary.roller_fetched += upsert_roller(conn, orgnr, roller)
+
+        if new_as_orgnrs:
+            log.info("Enriching %d new ASes via proff.no", len(new_as_orgnrs))
+            with enrich.ProffClient() as proff:
+                enrich_summary = enrich.enrich_orgnrs(conn, new_as_orgnrs, proff=proff)
+            summary.enriched = enrich_summary["enriched"]
 
         enk_matches = matcher.find_enk_conversions(conn, today=today)
         summary.enk_conversions = len(enk_matches)

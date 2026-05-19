@@ -18,7 +18,36 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
         f"updates_seen={summary.updates_seen} "
         f"roller_fetched={summary.roller_fetched} "
         f"leads_upserted={summary.leads_upserted} "
-        f"enk_conversions={summary.enk_conversions}"
+        f"enk_conversions={summary.enk_conversions} "
+        f"enriched={summary.enriched}"
+    )
+    return 0
+
+
+def _cmd_enrich(args: argparse.Namespace) -> int:
+    from . import enrich
+    from .db import connect, init_db
+    init_db()
+    with connect() as conn:
+        if args.all:
+            rows = conn.execute(
+                "SELECT orgnr FROM leads ORDER BY score DESC"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT l.orgnr FROM leads l
+                LEFT JOIN enrichment x ON x.orgnr = l.orgnr
+                WHERE x.orgnr IS NULL ORDER BY l.score DESC
+                """
+            ).fetchall()
+        orgnrs = [r[0] for r in rows]
+        with enrich.ProffClient() as proff:
+            summary = enrich.enrich_orgnrs(conn, orgnrs, proff=proff)
+    print(
+        f"attempted={summary['attempted']} "
+        f"enriched={summary['enriched']} "
+        f"skipped={summary['skipped']}"
     )
     return 0
 
@@ -33,8 +62,12 @@ def _cmd_backfill(args: argparse.Namespace) -> int:
 
 
 def _cmd_seed_enk(args: argparse.Namespace) -> int:
-    count = ingest.seed_enk(kommuner=args.kommune or None)
-    print(f"seeded_enk={count}")
+    result = ingest.seed_enk(kommuner=args.kommune or None)
+    print(
+        f"seeded_enk={result['seeded']} "
+        f"replay_refetched={result['replay_refetched']} "
+        f"replay_roller={result['replay_roller']}"
+    )
     return 0
 
 
@@ -74,6 +107,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     pe.add_argument("--kommune", action="append", help="Override kommunenummer (repeatable)")
     pe.set_defaults(func=_cmd_seed_enk)
+
+    px = sub.add_parser(
+        "enrich",
+        help="Fetch missing contact info from proff.no for existing leads",
+    )
+    px.add_argument(
+        "--all",
+        action="store_true",
+        help="Re-enrich every lead (default: only those with no enrichment row yet)",
+    )
+    px.set_defaults(func=_cmd_enrich)
 
     ps = sub.add_parser("serve", help="Run the local dashboard")
     ps.add_argument("--host", default="127.0.0.1")
