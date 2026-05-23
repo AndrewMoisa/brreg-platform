@@ -26,6 +26,9 @@ def _seed(db_path: Path) -> None:
     enheter.append(
         ("400000004", "DELTA WEB ENK", "ENK", "2026-05-18", "0301", "OSLO", "62.010", "IT", None, 8),
     )
+    enheter.append(
+        ("500000005", "EPSILON CAFE ENK", "ENK", "2026-05-19", "0301", "OSLO", "56.101", "Kafe", None, 8),
+    )
     for orgnr, navn, form, regdato, knr, knavn, naering, beskr, hjemme, score in enheter:
         conn.execute(
             """
@@ -42,6 +45,7 @@ def _seed(db_path: Path) -> None:
         ("200000002", ["target_industry"], 2),
         ("300000003", ["no_website"], 3),
         ("400000004", ["reachable", "no_website"], 2),
+        ("500000005", ["reachable", "no_website"], 8),
     ]
     for orgnr, cohorts, score in leads:
         conn.execute(
@@ -50,6 +54,10 @@ def _seed(db_path: Path) -> None:
             (orgnr, json.dumps(cohorts), score, now, now),
         )
     conn.execute("UPDATE enheter SET epost='founder@delta.no' WHERE orgnr='400000004'")
+    conn.execute(
+        "INSERT INTO enrichment (orgnr, epost, source, fetched_at) VALUES ('500000005','cafe@proff.no','proff','2026-05-23')"
+    )
+    conn.execute("UPDATE leads SET status='interested' WHERE orgnr='500000005'")
     conn.commit()
     conn.close()
 
@@ -73,7 +81,7 @@ def test_index_renders_all_leads(client):
     assert "GAMMA HOLDING AS" in body
     assert "DELTA WEB ENK" in body
     assert "Showing" in body
-    assert "<span class=\"font-semibold\">4</span>" in body
+    assert "<span class=\"font-semibold\">5</span>" in body
 
 
 def test_index_cohort_filter(client):
@@ -87,7 +95,7 @@ def test_index_cohort_filter(client):
 def test_index_limit_shows_truncation_banner(client):
     r = client.get("/?limit=1")
     assert r.status_code == 200
-    assert "Show all 4" in r.text
+    assert "Show all 5" in r.text
 
 
 def test_lead_detail_renders(client):
@@ -145,9 +153,11 @@ def test_today_view(client):
     # ACME RETAIL has score=5, status=new, registered today → call list
     assert "Call list" in body
     assert "ACME RETAIL AS" in body
-    # No followups or interested yet
+    # No followups yet
     assert "Follow up" not in body
-    assert "Open opportunities" not in body
+    # EPSILON is interested → Open opportunities section appears
+    assert "Open opportunities" in body
+    assert "EPSILON CAFE ENK" in body
 
 
 def test_status_update_rejects_invalid(client):
@@ -214,3 +224,8 @@ def test_filter_website_none(client):
     body = r.text
     assert "ACME RETAIL AS" in body          # no website
     assert "BETA CONSULTING AS" not in body  # has website
+
+
+def test_today_shows_enrichment_email(client):
+    r = client.get("/today")
+    assert "cafe@proff.no" in r.text

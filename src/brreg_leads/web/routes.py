@@ -189,10 +189,14 @@ def today(request: Request):
     followup_before = (today_ - timedelta(days=TODAY_FOLLOWUP_DAYS)).isoformat()
     base_select = """
         SELECT l.orgnr, l.cohorts_json, l.score, l.status, l.last_contacted_at,
-               e.navn, e.kommune_navn, e.kommunenummer, e.registreringsdato,
+               e.navn, e.organisasjonsform, e.kommune_navn, e.kommunenummer, e.registreringsdato,
                e.naeringskode1_kode, e.naeringskode1_beskrivelse,
-               e.epost, e.telefon, e.hjemmeside
-        FROM leads l JOIN enheter e ON e.orgnr = l.orgnr
+               COALESCE(NULLIF(e.epost, ''), x.epost) AS epost,
+               COALESCE(NULLIF(e.telefon, ''), x.telefon) AS telefon,
+               COALESCE(NULLIF(e.hjemmeside, ''), x.hjemmeside) AS hjemmeside
+        FROM leads l
+        JOIN enheter e ON e.orgnr = l.orgnr
+        LEFT JOIN enrichment x ON x.orgnr = l.orgnr
     """
     with connect() as conn:
         call_rows = conn.execute(
