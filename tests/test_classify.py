@@ -69,7 +69,7 @@ def test_konkurs_excluded():
     assert score == 0
 
 
-def test_non_as_excluded():
+def test_enk_without_recent_regdato_excluded():
     cohorts, _ = classify(
         _snap(organisasjonsform="ENK", hjemmeside=""), enk_conversion=False
     )
