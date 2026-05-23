@@ -74,3 +74,55 @@ def test_non_as_excluded():
         _snap(organisasjonsform="ENK", hjemmeside=""), enk_conversion=False
     )
     assert cohorts == []
+
+
+def test_reachable_when_email_present():
+    cohorts, score = classify(
+        _snap(epost="post@firma.no"), enk_conversion=False
+    )
+    assert "reachable" in cohorts
+    assert score >= 5
+
+
+def test_not_reachable_when_email_blank():
+    cohorts, _ = classify(_snap(epost=""), enk_conversion=False)
+    assert "reachable" not in cohorts
+
+
+def test_enk_recent_with_email_qualifies():
+    cohorts, _ = classify(
+        _snap(
+            organisasjonsform="ENK",
+            epost="post@enk.no",
+            registreringsdato="2026-05-01",
+            hjemmeside="",
+        ),
+        enk_conversion=False,
+        today=date(2026, 5, 23),
+    )
+    assert "reachable" in cohorts
+    assert "no_website" in cohorts
+
+
+def test_enk_old_is_not_a_lead():
+    cohorts, score = classify(
+        _snap(
+            organisasjonsform="ENK",
+            epost="post@enk.no",
+            registreringsdato="2025-01-01",
+            hjemmeside="",
+        ),
+        enk_conversion=False,
+        today=date(2026, 5, 23),
+    )
+    assert cohorts == []
+    assert score == 0
+
+
+def test_enk_missing_regdato_is_not_a_lead():
+    cohorts, _ = classify(
+        _snap(organisasjonsform="ENK", epost="post@enk.no", registreringsdato=None),
+        enk_conversion=False,
+        today=date(2026, 5, 23),
+    )
+    assert cohorts == []

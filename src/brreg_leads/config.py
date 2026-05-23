@@ -37,6 +37,7 @@ NAERINGSKODE_WHITELIST_PREFIXES: list[str] = [
 ]
 
 COHORT_WEIGHTS: dict[str, int] = {
+    "reachable": 5,
     "no_website": 3,
     "target_industry": 2,
     "enk_conversion": 4,
@@ -48,3 +49,4 @@ LEAD_STATUSES: list[str] = ["new", "contacted", "interested", "won", "lost", "ig
 ENK_CONVERSION_AS_LOOKBACK_DAYS = 30
 ENK_CONVERSION_ENK_LOOKBACK_DAYS = 60
 RECENTLY_MOVED_LOOKBACK_DAYS = 30
+NEW_BUSINESS_LOOKBACK_DAYS = 90

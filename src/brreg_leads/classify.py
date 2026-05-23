@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from .config import (
     COHORT_WEIGHTS,
     NAERINGSKODE_WHITELIST_PREFIXES,
+    NEW_BUSINESS_LOOKBACK_DAYS,
     RECENTLY_MOVED_LOOKBACK_DAYS,
 )
 
@@ -18,6 +19,8 @@ class EnhetSnapshot:
     under_avvikling: bool
     slettedato: str | None
     last_oppdatering_dato: str | None  # ISO date of most recent /oppdateringer event
+    epost: str | None = None
+    registreringsdato: str | None = None
 
 
 def has_no_website(e: EnhetSnapshot) -> bool:
@@ -30,6 +33,16 @@ def in_target_industry(e: EnhetSnapshot) -> bool:
     if not code:
         return False
     return any(code.startswith(p) for p in NAERINGSKODE_WHITELIST_PREFIXES)
+
+
+def _registered_within(registreringsdato: str | None, today: date, days: int) -> bool:
+    if not registreringsdato:
+        return False
+    try:
+        d = date.fromisoformat(registreringsdato[:10])
+    except ValueError:
+        return False
+    return (today - d) <= timedelta(days=days)
 
 
 def recently_moved(e: EnhetSnapshot, today: date) -> bool:
@@ -48,12 +61,18 @@ def classify(
     today: date | None = None,
 ) -> tuple[list[str], int]:
     today = today or date.today()
-    if e.organisasjonsform != "AS":
+    if e.organisasjonsform not in ("AS", "ENK"):
         return [], 0
     if e.konkurs or e.under_avvikling or e.slettedato:
         return [], 0
+    if e.organisasjonsform == "ENK" and not _registered_within(
+        e.registreringsdato, today, NEW_BUSINESS_LOOKBACK_DAYS
+    ):
+        return [], 0
 
     cohorts: list[str] = []
+    if e.epost and e.epost.strip():
+        cohorts.append("reachable")
     if has_no_website(e):
         cohorts.append("no_website")
     if in_target_industry(e):
