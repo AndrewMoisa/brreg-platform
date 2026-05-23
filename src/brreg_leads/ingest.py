@@ -191,13 +191,18 @@ def _reclassify_all(
     enk_matches: dict[str, dict],
     today: date,
 ) -> int:
+    cutoff = (today - timedelta(days=NEW_BUSINESS_LOOKBACK_DAYS)).isoformat()
     rows = conn.execute(
         """
-        SELECT orgnr, organisasjonsform, hjemmeside, naeringskode1_kode,
-               konkurs, under_avvikling, slettedato
-        FROM enheter
-        WHERE organisasjonsform = 'AS'
-        """
+        SELECT e.orgnr, e.organisasjonsform, e.hjemmeside, e.naeringskode1_kode,
+               e.konkurs, e.under_avvikling, e.slettedato, e.registreringsdato,
+               COALESCE(NULLIF(e.epost, ''), x.epost) AS epost
+        FROM enheter e
+        LEFT JOIN enrichment x ON x.orgnr = e.orgnr
+        WHERE e.organisasjonsform = 'AS'
+           OR (e.organisasjonsform = 'ENK' AND e.registreringsdato >= ?)
+        """,
+        (cutoff,),
     ).fetchall()
     count = 0
     for row in rows:
@@ -210,6 +215,8 @@ def _reclassify_all(
             under_avvikling=bool(row["under_avvikling"]),
             slettedato=row["slettedato"],
             last_oppdatering_dato=_last_oppdatering_dato(conn, row["orgnr"]),
+            epost=row["epost"],
+            registreringsdato=row["registreringsdato"],
         )
         cohorts, score = classify.classify(
             snap,

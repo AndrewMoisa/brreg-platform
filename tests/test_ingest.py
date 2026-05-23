@@ -242,3 +242,25 @@ def test_enrich_recent_enks_only_targets_missing_email(conn, monkeypatch):
     monkeypatch.setattr(ingest.enrich, "enrich_orgnrs", fake_enrich_orgnrs)
     ingest._enrich_recent_enks(conn, today=date(2026, 5, 23), proff=None)
     assert targeted == ["810000010"]
+
+
+def test_reclassify_includes_recent_enk_excludes_old(conn):
+    ingest.upsert_enhet(conn, _enk_payload("820000001", regdato="2026-05-20", epost="x@y.no"))
+    ingest.upsert_enhet(conn, _enk_payload("820000002", regdato="2023-01-01", epost="x@y.no"))
+    n = ingest._reclassify_all(conn, enk_matches={}, today=date(2026, 5, 23))
+    recent = conn.execute("SELECT cohorts_json FROM leads WHERE orgnr='820000001'").fetchone()
+    old = conn.execute("SELECT 1 FROM leads WHERE orgnr='820000002'").fetchone()
+    assert recent is not None and "reachable" in recent["cohorts_json"]
+    assert old is None
+    assert n >= 1
+
+
+def test_reclassify_uses_enrichment_email(conn):
+    ingest.upsert_enhet(conn, _enk_payload("830000001", regdato="2026-05-20", epost=None))
+    conn.execute(
+        "INSERT INTO enrichment (orgnr, epost, source, fetched_at) VALUES (?, ?, 'proff', '2026-05-23')",
+        ("830000001", "proffonly@firma.no"),
+    )
+    ingest._reclassify_all(conn, enk_matches={}, today=date(2026, 5, 23))
+    row = conn.execute("SELECT cohorts_json FROM leads WHERE orgnr='830000001'").fetchone()
+    assert row is not None and "reachable" in row["cohorts_json"]
