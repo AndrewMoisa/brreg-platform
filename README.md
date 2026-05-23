@@ -1,9 +1,11 @@
 # brreg-platform
 
 Lead-generation tool for a Norwegian web/email agency. Pulls newly-registered
-ASes from the Brønnøysundregistrene open Enhetsregisteret API, tags them by
-cohort (no website, target industry, ENK→AS conversion, recently moved), and
-exposes a local dashboard for working leads.
+ASes and ENKs from the Brønnøysundregistrene open Enhetsregisteret API, tags
+them by cohort (reachable, no website, target industry, ENK→AS conversion,
+recently moved), and exposes a local dashboard for working leads. Companies
+with an email address are sorted to the top of the dashboard (reachable-first)
+and are the primary target — website presence decides the pitch, not the gate.
 
 ## Setup
 
@@ -16,12 +18,12 @@ pip install -e ".[dev]"
 ## First run
 
 ```powershell
-python -m brreg_leads backfill --since 2026-04-19   # new ASes for last 30 days
+python -m brreg_leads backfill --since 2026-04-19   # new ASes and ENKs for last 30 days
 python -m brreg_leads seed-enk                       # one-shot, enables ENK→AS detection
 ```
 
-`backfill` populates `data/leads.db` with new ASes in Oslo + Akershus
-(see `src/brreg_leads/config.py` to edit the kommune list).
+`backfill` populates `data/leads.db` with new ASes and ENKs in Oslo +
+Akershus (see `src/brreg_leads/config.py` to edit the kommune list).
 
 `seed-enk` populates currently-active ENKs in the same kommuner. This is
 required for ENK→AS conversion detection — without it, the matcher has
@@ -73,7 +75,9 @@ python -m brreg_leads serve
 
 Then open <http://localhost:8000>.
 
-- Filter by cohort (no_website / target_industry / enk_conversion / recently_moved)
+- Leads are sorted reachable-first (companies with an email on top), then by score, then by registration date
+- Filter by cohort (reachable / no_website / target_industry / enk_conversion / recently_moved)
+- Filter by type (AS / ENK), reachable, or website presence (has / none)
 - Filter by kommune, næringskode prefix, search by name/orgnr
 - Update lead status (new / contacted / interested / won / lost / ignored) with notes
 - Export filtered view as CSV
