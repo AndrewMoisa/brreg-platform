@@ -242,7 +242,7 @@ def _pull_new_as(
     new_as_orgnrs: list[str] = []
     for k in kommuner:
         log.info("Pulling new AS for kommune %s since %s", k, since)
-        for enhet in client.iter_new_as(k, registered_from=since, registered_to=until):
+        for enhet in client.iter_new_enheter("AS", k, registered_from=since, registered_to=until):
             existed = conn.execute(
                 "SELECT 1 FROM enheter WHERE orgnr = ?", (enhet["organisasjonsnummer"],)
             ).fetchone()

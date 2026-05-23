@@ -95,3 +95,23 @@ def test_connect_error_retries():
     result = client.get_enhet("999999999")
     assert result == {"organisasjonsnummer": "999999999"}
     assert len(calls) == 2
+
+
+def test_iter_new_enheter_passes_organisasjonsform(monkeypatch):
+    from brreg_leads.brreg_client import BrregClient
+
+    captured = {}
+
+    class _Resp:
+        def json(self):
+            return {"_embedded": {"enheter": []}, "page": {"totalPages": 0}}
+
+    def fake_get(self, path, params=None):
+        captured["params"] = params
+        return _Resp()
+
+    monkeypatch.setattr(BrregClient, "_get", fake_get)
+    client = BrregClient()
+    list(client.iter_new_enheter("ENK", "0301", registered_from="2026-05-01"))
+    assert captured["params"]["organisasjonsform"] == "ENK"
+    assert captured["params"]["kommunenummer"] == "0301"

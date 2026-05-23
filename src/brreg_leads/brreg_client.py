@@ -98,8 +98,9 @@ class BrregClient:
             raise
         return resp.json()
 
-    def iter_new_as(
+    def iter_new_enheter(
         self,
+        organisasjonsform: str,
         kommunenummer: str,
         registered_from: str,
         registered_to: str | None = None,
@@ -108,7 +109,7 @@ class BrregClient:
         page = 0
         while True:
             params: dict[str, Any] = {
-                "organisasjonsform": "AS",
+                "organisasjonsform": organisasjonsform,
                 "kommunenummer": kommunenummer,
                 "fraRegistreringsdatoEnhetsregisteret": registered_from,
                 "size": page_size,
