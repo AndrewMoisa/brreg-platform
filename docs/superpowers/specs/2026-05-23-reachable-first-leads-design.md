@@ -32,12 +32,18 @@ not whether it qualifies:
 - **Reachable + has website** → "upsell features" lead.
 - **No email** → kept in the DB and list but sorted to the bottom (unreachable).
 
+An ENK is reachable if it has an email on **Brreg *or* proff**. Brreg leaves email empty
+for many entities, so for ENKs in the recency window that lack a Brreg email we actively
+proff-enrich them to discover proff-only addresses, and include the ones that turn up an
+email.
+
 ## Non-goals
 
-- Email enrichment for no-email companies (confirmed not findable; not worth building).
+- Discovering emails for companies that have none on either Brreg or proff (confirmed not
+  findable elsewhere; not worth building).
 - Sending email / outreach automation — that is the next, separate spec.
-- Fetching roles or proff-enriching new ENKs (we only want ENKs that *already* have an
-  email, so there is nothing to enrich; skipping keeps API volume sane).
+- Fetching **roles** for new ENKs — the proprietor is the contact and email is all we
+  need, so the AS-only role-fetch step stays AS-only.
 - Backfill-scale ENK partitioning (documented limitation, see Ingest).
 
 ## Design
@@ -97,8 +103,15 @@ reachable ones (see Dashboard sort).
 - In `run_ingest`, after `_pull_new_as`, also pull **new ENKs** for each kommune using the
   **same `LAST_POLL_KEY` date cursor** (it's `fraRegistreringsdatoEnhetsregisteret`-based,
   so one cursor serves both forms). Upsert into `enheter` exactly like ASes.
-- New ENKs do **not** get role fetching or proff enrichment (non-goal above). The new-AS
-  role-fetch + enrichment steps stay AS-only and unchanged.
+- New ENKs do **not** get role fetching (non-goal above); the new-AS role-fetch step
+  stays AS-only and unchanged.
+- **Proff-enrich in-window ENKs missing a Brreg email.** After upserting, run
+  `enrich.enrich_orgnrs` over ENKs that are within `NEW_BUSINESS_LOOKBACK_DAYS` and have no
+  Brreg `epost`, so proff-only emails are discovered. This is idempotent (existing
+  enrichment rows are refreshed; already-enriched ENKs are cheap to re-check) and the skip
+  condition should key on **email** presence, not email+phone. Daily this is a small set
+  (only newly-registered ENKs); the first run after this ships may enrich a larger batch
+  of already-seeded in-window ENKs — see Risks.
 - The existing `/oppdateringer` refresh + deleted-ENK role hook + `seed-enk` flow are
   untouched.
 
@@ -130,8 +143,9 @@ unaffected. We document this rather than build date-partitioning for new-ENK pag
 
 - `tests/test_classify.py`: ENK accepted when recent; ENK rejected when older than the
   window; `reachable` cohort added on email present/absent; AS still ungated.
-- `tests/test_ingest.py`: new-ENK paging upserts ENKs; ENK rows are not role-fetched /
-  enriched; reclassify scope excludes old ENKs.
+- `tests/test_ingest.py`: new-ENK paging upserts ENKs; in-window ENKs missing a Brreg
+  email are proff-enriched (and a proff-discovered email makes them reachable); ENK rows
+  are not role-fetched; reclassify scope excludes old ENKs.
 - `tests/test_routes.py`: reachable-first ordering; `reachable` / `orgform` / `website`
   filters; AS/ENK badge data present.
 
@@ -148,5 +162,9 @@ unaffected. We document this rather than build date-partitioning for new-ENK pag
 - **ENK volume explosion** — mitigated by the recency guard (§1.2) and scoped reclassify
   (§2). This is the highest-risk part; tests must cover it explicitly.
 - **Backfill offset cap for ENKs** — documented limitation, not handled in v1.
+- **First-run ENK enrichment batch** — proff-enriching all already-seeded in-window ENKs
+  that lack a Brreg email is a one-time larger batch (throttled at proff's ~1 req/sec).
+  Acceptable for a local tool; subsequent daily runs only enrich the day's new ENKs. If
+  proff rate-limits us, `ProffClient` already self-disables for the run.
 - **Lead-list size growth** — more leads overall; the reachable-first sort + filters keep
   the working set focused.
