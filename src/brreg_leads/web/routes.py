@@ -42,6 +42,15 @@ def _build_where(
     if search:
         where.append("(e.navn LIKE ? OR e.orgnr LIKE ?)")
         params.extend([f"%{search}%", f"%{search}%"])
+    if reachable:
+        where.append("COALESCE(NULLIF(e.epost, ''), x.epost) IS NOT NULL")
+    if orgform:
+        where.append("e.organisasjonsform = ?")
+        params.append(orgform)
+    if website == "has":
+        where.append("COALESCE(NULLIF(e.hjemmeside, ''), x.hjemmeside) IS NOT NULL")
+    elif website == "none":
+        where.append("COALESCE(NULLIF(e.hjemmeside, ''), x.hjemmeside) IS NULL")
     return " AND ".join(where), params
 
 
@@ -87,10 +96,18 @@ def _build_count_query(
     kommune: str | None,
     naering_prefix: str | None,
     search: str | None,
+    reachable: str | None = None,
+    orgform: str | None = None,
+    website: str | None = None,
 ) -> tuple[str, list[Any]]:
-    where_sql, params = _build_where(cohort, status, kommune, naering_prefix, search)
+    where_sql, params = _build_where(
+        cohort, status, kommune, naering_prefix, search, reachable, orgform, website
+    )
     return (
-        f"SELECT COUNT(*) AS c FROM leads l JOIN enheter e ON e.orgnr = l.orgnr WHERE {where_sql}",
+        "SELECT COUNT(*) AS c FROM leads l "
+        "JOIN enheter e ON e.orgnr = l.orgnr "
+        "LEFT JOIN enrichment x ON x.orgnr = l.orgnr "
+        f"WHERE {where_sql}",
         params,
     )
 
@@ -103,12 +120,19 @@ def index(
     kommune: str | None = None,
     naering_prefix: str | None = None,
     search: str | None = None,
+    reachable: str | None = None,
+    orgform: str | None = None,
+    website: str | None = None,
     limit: int = 2000,
 ):
-    sql, params = _build_lead_query(cohort, status, kommune, naering_prefix, search)
+    sql, params = _build_lead_query(
+        cohort, status, kommune, naering_prefix, search, reachable, orgform, website
+    )
     sql += " LIMIT ?"
     params.append(limit)
-    count_sql, count_params = _build_count_query(cohort, status, kommune, naering_prefix, search)
+    count_sql, count_params = _build_count_query(
+        cohort, status, kommune, naering_prefix, search, reachable, orgform, website
+    )
     with connect() as conn:
         rows = conn.execute(sql, params).fetchall()
         total = conn.execute("SELECT COUNT(*) AS c FROM leads").fetchone()["c"]
@@ -143,6 +167,9 @@ def index(
                 "kommune": kommune or "",
                 "naering_prefix": naering_prefix or "",
                 "search": search or "",
+                "reachable": reachable or "",
+                "orgform": orgform or "",
+                "website": website or "",
                 "limit": limit,
             },
         },
@@ -303,8 +330,13 @@ def export_csv(
     kommune: str | None = None,
     naering_prefix: str | None = None,
     search: str | None = None,
+    reachable: str | None = None,
+    orgform: str | None = None,
+    website: str | None = None,
 ):
-    sql, params = _build_lead_query(cohort, status, kommune, naering_prefix, search)
+    sql, params = _build_lead_query(
+        cohort, status, kommune, naering_prefix, search, reachable, orgform, website
+    )
     with connect() as conn:
         rows = conn.execute(sql, params).fetchall()
 

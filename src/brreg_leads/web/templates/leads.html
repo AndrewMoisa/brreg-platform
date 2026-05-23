@@ -39,11 +39,28 @@
     <label class="text-xs text-slate-600">Search
       <input type="text" name="search" value="{{ filters.search }}" class="block border rounded px-2 py-1 text-sm w-48" placeholder="name or orgnr">
     </label>
+    <label class="text-xs text-slate-600">Type
+      <select name="orgform" class="block border rounded px-2 py-1 text-sm">
+        <option value="">All</option>
+        <option value="AS" {% if filters.orgform == 'AS' %}selected{% endif %}>AS</option>
+        <option value="ENK" {% if filters.orgform == 'ENK' %}selected{% endif %}>ENK</option>
+      </select>
+    </label>
+    <label class="text-xs text-slate-600">Website
+      <select name="website" class="block border rounded px-2 py-1 text-sm">
+        <option value="">All</option>
+        <option value="none" {% if filters.website == 'none' %}selected{% endif %}>No website</option>
+        <option value="has" {% if filters.website == 'has' %}selected{% endif %}>Has website</option>
+      </select>
+    </label>
+    <label class="text-xs text-slate-600 flex items-center gap-1 mt-4">
+      <input type="checkbox" name="reachable" value="1" {% if filters.reachable %}checked{% endif %}> Reachable only
+    </label>
     <label class="text-xs text-slate-600">Limit
       <input type="number" name="limit" value="{{ filters.limit }}" class="block border rounded px-2 py-1 text-sm w-20">
     </label>
     <button type="submit" class="bg-slate-900 text-white text-sm px-3 py-1 rounded">Filter</button>
-    <a href="/export.csv?cohort={{ filters.cohort }}&status={{ filters.status }}&kommune={{ filters.kommune }}&naering_prefix={{ filters.naering_prefix }}&search={{ filters.search }}"
+    <a href="/export.csv?cohort={{ filters.cohort }}&status={{ filters.status }}&kommune={{ filters.kommune }}&naering_prefix={{ filters.naering_prefix }}&search={{ filters.search }}&reachable={{ filters.reachable }}&orgform={{ filters.orgform }}&website={{ filters.website }}"
        class="text-sm text-blue-700 underline ml-auto">Export CSV</a>
   </form>
 </section>
@@ -57,7 +74,7 @@
     {% endif %}.
   </div>
   {% if is_truncated %}
-    <a href="?cohort={{ filters.cohort }}&status={{ filters.status }}&kommune={{ filters.kommune }}&naering_prefix={{ filters.naering_prefix }}&search={{ filters.search }}&limit={{ filtered_total }}"
+    <a href="?cohort={{ filters.cohort }}&status={{ filters.status }}&kommune={{ filters.kommune }}&naering_prefix={{ filters.naering_prefix }}&search={{ filters.search }}&reachable={{ filters.reachable }}&orgform={{ filters.orgform }}&website={{ filters.website }}&limit={{ filtered_total }}"
        class="text-blue-700 underline">Show all {{ filtered_total }}</a>
   {% endif %}
 </div>

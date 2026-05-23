@@ -193,3 +193,24 @@ def test_orgform_shown(client):
     body = r.text
     assert ">ENK<" in body  # ENK badge for DELTA
     assert ">AS<" in body   # AS badge for the AS leads
+
+
+def test_filter_reachable_only(client):
+    r = client.get("/?reachable=1")
+    body = r.text
+    assert "DELTA WEB ENK" in body          # has email
+    assert "GAMMA HOLDING AS" not in body    # no email
+
+
+def test_filter_orgform_enk(client):
+    r = client.get("/?orgform=ENK")
+    body = r.text
+    assert "DELTA WEB ENK" in body
+    assert "ACME RETAIL AS" not in body
+
+
+def test_filter_website_none(client):
+    r = client.get("/?website=none")
+    body = r.text
+    assert "ACME RETAIL AS" in body          # no website
+    assert "BETA CONSULTING AS" not in body  # has website
