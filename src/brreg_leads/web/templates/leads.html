@@ -69,7 +69,7 @@
   <div class="text-slate-600">
     Showing <span class="font-semibold">{{ leads|length }}</span> of
     <span class="font-semibold">{{ filtered_total }}</span> leads matching filters
-    {% if filters.cohort or filters.status or filters.kommune or filters.naering_prefix or filters.search %}
+    {% if filters.cohort or filters.status or filters.kommune or filters.naering_prefix or filters.search or filters.reachable or filters.orgform or filters.website %}
       <span class="text-slate-400">(of {{ total }} in DB)</span>
     {% endif %}.
   </div>
