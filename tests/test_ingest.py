@@ -186,7 +186,7 @@ def test_end_to_end_match_after_lazy_fetch(conn):
 
 
 class FakeIngestClient:
-    """Pages new enheter and serves no roller; records proff-independent calls."""
+    """Pages new enheter by kommunenummer; fetches no roller or enrichment data."""
 
     def __init__(self, enheter_by_form: dict[str, list[dict]]):
         self._by_form = enheter_by_form
@@ -218,13 +218,20 @@ def test_pull_new_enk_upserts(conn):
 
 
 def test_enrich_recent_enks_only_targets_missing_email(conn, monkeypatch):
-    # one in-window ENK missing email, one with email, one too old
+    # one in-window ENK missing email, one with email, one too old,
+    # and one in-window + missing email but already has an enrichment row
     for orgnr, regdato, epost in [
         ("810000010", "2026-05-20", None),
         ("810000011", "2026-05-20", "has@mail.no"),
         ("810000012", "2024-01-01", None),
+        ("810000013", "2026-05-20", None),
     ]:
         ingest.upsert_enhet(conn, _enk_payload(orgnr, regdato=regdato, epost=epost))
+
+    # 810000013 is already enriched — must be excluded by the NOT IN filter
+    conn.execute(
+        "INSERT INTO enrichment (orgnr, source, fetched_at) VALUES ('810000013', 'proff', '2026-05-23')"
+    )
 
     targeted: list[str] = []
 

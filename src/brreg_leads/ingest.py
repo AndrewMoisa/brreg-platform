@@ -291,6 +291,8 @@ def _enrich_recent_enks(
     orgnrs = [r["orgnr"] for r in rows]
     if not orgnrs:
         return 0
+    # The SQL above is the sole gate (in-window, no Brreg email, not yet enriched),
+    # so attempt every selected orgnr — don't let enrich_orgnrs re-skip them.
     summary = enrich.enrich_orgnrs(conn, orgnrs, proff=proff, skip_if_brreg_has_email=False)
     return summary["enriched"]
 
