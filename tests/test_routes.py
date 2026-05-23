@@ -41,7 +41,7 @@ def _seed(db_path: Path) -> None:
         ("100000001", ["no_website", "target_industry"], 5),
         ("200000002", ["target_industry"], 2),
         ("300000003", ["no_website"], 3),
-        ("400000004", ["reachable", "no_website"], 8),
+        ("400000004", ["reachable", "no_website"], 2),
     ]
     for orgnr, cohorts, score in leads:
         conn.execute(
@@ -184,10 +184,12 @@ def test_empty_db(tmp_path, monkeypatch):
 def test_reachable_lead_sorts_first(client):
     r = client.get("/")
     body = r.text
-    # DELTA (has email) must appear before GAMMA (no email).
+    # DELTA (score=2, has email) sorts above GAMMA (score=3, no email) only because email-tier beats score.
     assert body.index("DELTA WEB ENK") < body.index("GAMMA HOLDING AS")
 
 
 def test_orgform_shown(client):
     r = client.get("/")
-    assert "ENK" in r.text  # the AS/ENK badge for DELTA
+    body = r.text
+    assert ">ENK<" in body  # ENK badge for DELTA
+    assert ">AS<" in body   # AS badge for the AS leads
