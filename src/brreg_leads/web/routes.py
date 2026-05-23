@@ -21,6 +21,9 @@ def _build_where(
     kommune: str | None,
     naering_prefix: str | None,
     search: str | None,
+    reachable: str | None = None,
+    orgform: str | None = None,
+    website: str | None = None,
 ) -> tuple[str, list[Any]]:
     where = ["l.cohorts_json IS NOT NULL"]
     params: list[Any] = []
@@ -48,11 +51,16 @@ def _build_lead_query(
     kommune: str | None,
     naering_prefix: str | None,
     search: str | None,
+    reachable: str | None = None,
+    orgform: str | None = None,
+    website: str | None = None,
 ) -> tuple[str, list[Any]]:
-    where_sql, params = _build_where(cohort, status, kommune, naering_prefix, search)
+    where_sql, params = _build_where(
+        cohort, status, kommune, naering_prefix, search, reachable, orgform, website
+    )
     sql = f"""
         SELECT l.orgnr, l.cohorts_json, l.score, l.status, l.notes, l.last_contacted_at,
-               e.navn, e.kommunenummer, e.kommune_navn, e.registreringsdato,
+               e.navn, e.organisasjonsform, e.kommunenummer, e.kommune_navn, e.registreringsdato,
                e.naeringskode1_kode, e.naeringskode1_beskrivelse,
                COALESCE(NULLIF(e.epost, ''), x.epost) AS epost,
                COALESCE(NULLIF(e.telefon, ''), x.telefon) AS telefon,
@@ -67,7 +75,8 @@ def _build_lead_query(
         JOIN enheter e ON e.orgnr = l.orgnr
         LEFT JOIN enrichment x ON x.orgnr = l.orgnr
         WHERE {where_sql}
-        ORDER BY l.score DESC, e.registreringsdato DESC
+        ORDER BY (CASE WHEN COALESCE(NULLIF(e.epost, ''), x.epost) IS NOT NULL THEN 1 ELSE 0 END) DESC,
+                 l.score DESC, e.registreringsdato DESC
     """
     return sql, params
 

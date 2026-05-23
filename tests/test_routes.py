@@ -23,6 +23,9 @@ def _seed(db_path: Path) -> None:
         ("200000002", "BETA CONSULTING AS", "AS", "2026-05-12", "0301", "OSLO", "70.200", "Konsulent", "betaconsult.no", 3),
         ("300000003", "GAMMA HOLDING AS", "AS", "2026-05-15", "0301", "OSLO", "64.200", "Holding", None, 0),
     ]
+    enheter.append(
+        ("400000004", "DELTA WEB ENK", "ENK", "2026-05-18", "0301", "OSLO", "62.010", "IT", None, 8),
+    )
     for orgnr, navn, form, regdato, knr, knavn, naering, beskr, hjemme, score in enheter:
         conn.execute(
             """
@@ -38,6 +41,7 @@ def _seed(db_path: Path) -> None:
         ("100000001", ["no_website", "target_industry"], 5),
         ("200000002", ["target_industry"], 2),
         ("300000003", ["no_website"], 3),
+        ("400000004", ["reachable", "no_website"], 8),
     ]
     for orgnr, cohorts, score in leads:
         conn.execute(
@@ -45,6 +49,7 @@ def _seed(db_path: Path) -> None:
                VALUES (?, ?, ?, 'new', ?, ?)""",
             (orgnr, json.dumps(cohorts), score, now, now),
         )
+    conn.execute("UPDATE enheter SET epost='founder@delta.no' WHERE orgnr='400000004'")
     conn.commit()
     conn.close()
 
@@ -66,8 +71,9 @@ def test_index_renders_all_leads(client):
     assert "ACME RETAIL AS" in body
     assert "BETA CONSULTING AS" in body
     assert "GAMMA HOLDING AS" in body
+    assert "DELTA WEB ENK" in body
     assert "Showing" in body
-    assert "<span class=\"font-semibold\">3</span>" in body
+    assert "<span class=\"font-semibold\">4</span>" in body
 
 
 def test_index_cohort_filter(client):
@@ -81,7 +87,7 @@ def test_index_cohort_filter(client):
 def test_index_limit_shows_truncation_banner(client):
     r = client.get("/?limit=1")
     assert r.status_code == 200
-    assert "Show all 3" in r.text
+    assert "Show all 4" in r.text
 
 
 def test_lead_detail_renders(client):
@@ -173,3 +179,15 @@ def test_empty_db(tmp_path, monkeypatch):
     r = c.get("/")
     assert r.status_code == 200
     assert "No leads" in r.text
+
+
+def test_reachable_lead_sorts_first(client):
+    r = client.get("/")
+    body = r.text
+    # DELTA (has email) must appear before GAMMA (no email).
+    assert body.index("DELTA WEB ENK") < body.index("GAMMA HOLDING AS")
+
+
+def test_orgform_shown(client):
+    r = client.get("/")
+    assert "ENK" in r.text  # the AS/ENK badge for DELTA

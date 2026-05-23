@@ -66,6 +66,7 @@
   <thead class="bg-slate-100 text-slate-600 text-left">
     <tr>
       <th class="px-3 py-2">Navn</th>
+      <th class="px-3 py-2">Type</th>
       <th class="px-3 py-2">Orgnr</th>
       <th class="px-3 py-2">Kommune</th>
       <th class="px-3 py-2">Næring</th>
@@ -80,6 +81,7 @@
     {% for l in leads %}
     <tr class="border-t hover:bg-slate-50">
       <td class="px-3 py-2"><a class="text-blue-700 hover:underline font-medium" href="/lead/{{ l.orgnr }}">{{ l.navn }}</a></td>
+      <td class="px-3 py-2"><span class="text-xs font-mono px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200">{{ l.organisasjonsform }}</span></td>
       <td class="px-3 py-2 font-mono text-xs">{{ l.orgnr }}</td>
       <td class="px-3 py-2">{{ l.kommune_navn or l.kommunenummer or '' }}</td>
       <td class="px-3 py-2"><span class="font-mono text-xs">{{ l.naeringskode1_kode or '' }}</span> <span class="text-slate-500">{{ l.naeringskode1_beskrivelse or '' }}</span></td>
@@ -98,7 +100,7 @@
     </tr>
     {% endfor %}
     {% if not leads %}
-    <tr><td colspan="9" class="px-3 py-8 text-center text-slate-500">No leads match the current filters.</td></tr>
+    <tr><td colspan="10" class="px-3 py-8 text-center text-slate-500">No leads match the current filters.</td></tr>
     {% endif %}
   </tbody>
 </table>
