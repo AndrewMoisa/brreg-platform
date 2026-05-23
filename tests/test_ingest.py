@@ -183,3 +183,55 @@ def test_end_to_end_match_after_lazy_fetch(conn):
     matches = matcher.find_enk_conversions(conn, today=date(2026, 5, 19))
     assert "200000002" in matches
     assert matches["200000002"]["enk_orgnr"] == "100000001"
+
+
+class FakeIngestClient:
+    """Pages new enheter and serves no roller; records proff-independent calls."""
+
+    def __init__(self, enheter_by_form: dict[str, list[dict]]):
+        self._by_form = enheter_by_form
+
+    def iter_new_enheter(self, organisasjonsform, kommunenummer, registered_from, registered_to=None):
+        for e in self._by_form.get(organisasjonsform, []):
+            if e.get("forretningsadresse", {}).get("kommunenummer") == kommunenummer:
+                yield e
+
+
+def _enk_payload(orgnr, *, regdato, epost=None, kommune="0301"):
+    return {
+        "organisasjonsnummer": orgnr,
+        "navn": f"ENK {orgnr}",
+        "organisasjonsform": {"kode": "ENK"},
+        "registreringsdatoEnhetsregisteret": regdato,
+        "forretningsadresse": {"kommunenummer": kommune, "kommune": "OSLO"},
+        "epostadresse": epost,
+    }
+
+
+def test_pull_new_enk_upserts(conn):
+    client = FakeIngestClient({"ENK": [_enk_payload("810000001", regdato="2026-05-20", epost="a@b.no")]})
+    seen = ingest._pull_new_enk(client, conn, since="2026-05-01", until=None, kommuner=["0301"])
+    assert seen == 1
+    row = conn.execute("SELECT organisasjonsform, epost FROM enheter WHERE orgnr='810000001'").fetchone()
+    assert row["organisasjonsform"] == "ENK"
+    assert row["epost"] == "a@b.no"
+
+
+def test_enrich_recent_enks_only_targets_missing_email(conn, monkeypatch):
+    # one in-window ENK missing email, one with email, one too old
+    for orgnr, regdato, epost in [
+        ("810000010", "2026-05-20", None),
+        ("810000011", "2026-05-20", "has@mail.no"),
+        ("810000012", "2024-01-01", None),
+    ]:
+        ingest.upsert_enhet(conn, _enk_payload(orgnr, regdato=regdato, epost=epost))
+
+    targeted: list[str] = []
+
+    def fake_enrich_orgnrs(c, orgnrs, proff=None, skip_if_brreg_has_email=True):
+        targeted.extend(orgnrs)
+        return {"attempted": len(targeted), "enriched": 0, "skipped": 0}
+
+    monkeypatch.setattr(ingest.enrich, "enrich_orgnrs", fake_enrich_orgnrs)
+    ingest._enrich_recent_enks(conn, today=date(2026, 5, 23), proff=None)
+    assert targeted == ["810000010"]

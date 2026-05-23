@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 from . import classify, enrich, matcher
 from .brreg_client import BrregClient, BrregPaginationLimit
-from .config import KOMMUNER
+from .config import KOMMUNER, NEW_BUSINESS_LOOKBACK_DAYS
 from .db import connect, get_state, init_db, set_state
 
 log = logging.getLogger(__name__)
@@ -21,6 +21,7 @@ DEFAULT_BACKFILL_DAYS = 30
 @dataclass
 class IngestSummary:
     new_as_seen: int = 0
+    new_enk_seen: int = 0
     updates_seen: int = 0
     roller_fetched: int = 0
     leads_upserted: int = 0
@@ -253,6 +254,47 @@ def _pull_new_as(
     return seen, new_as_orgnrs
 
 
+def _pull_new_enk(
+    client: "BrregClient",
+    conn: sqlite3.Connection,
+    since: str,
+    until: str | None,
+    kommuner: Iterable[str],
+) -> int:
+    seen = 0
+    for k in kommuner:
+        log.info("Pulling new ENK for kommune %s since %s", k, since)
+        for enhet in client.iter_new_enheter("ENK", k, registered_from=since, registered_to=until):
+            upsert_enhet(conn, enhet)
+            seen += 1
+    return seen
+
+
+def _enrich_recent_enks(
+    conn: sqlite3.Connection,
+    today: date,
+    proff: "enrich.ProffClient | None",
+) -> int:
+    """Proff-enrich in-window ENKs that have no Brreg email, to discover proff-only
+    addresses. Skips ENKs we've already enriched. Idempotent."""
+    cutoff = (today - timedelta(days=NEW_BUSINESS_LOOKBACK_DAYS)).isoformat()
+    rows = conn.execute(
+        """
+        SELECT orgnr FROM enheter
+        WHERE organisasjonsform = 'ENK'
+          AND registreringsdato >= ?
+          AND (epost IS NULL OR epost = '')
+          AND orgnr NOT IN (SELECT orgnr FROM enrichment)
+        """,
+        (cutoff,),
+    ).fetchall()
+    orgnrs = [r["orgnr"] for r in rows]
+    if not orgnrs:
+        return 0
+    summary = enrich.enrich_orgnrs(conn, orgnrs, proff=proff, skip_if_brreg_has_email=False)
+    return summary["enriched"]
+
+
 def _pull_oppdateringer(
     client: BrregClient,
     conn: sqlite3.Connection,
@@ -426,6 +468,7 @@ def run_ingest(
 
         seen, new_as_orgnrs = _pull_new_as(client, conn, since, until, target_kommuner)
         summary.new_as_seen = seen
+        summary.new_enk_seen = _pull_new_enk(client, conn, since, until, target_kommuner)
 
         if not skip_oppdateringer:
             after_id_str = get_state(conn, LAST_OPPDATERING_KEY)
@@ -444,11 +487,11 @@ def run_ingest(
             roller = client.get_roller(orgnr)
             summary.roller_fetched += upsert_roller(conn, orgnr, roller)
 
-        if new_as_orgnrs:
-            log.info("Enriching %d new ASes via proff.no", len(new_as_orgnrs))
-            with enrich.ProffClient() as proff:
-                enrich_summary = enrich.enrich_orgnrs(conn, new_as_orgnrs, proff=proff)
-            summary.enriched = enrich_summary["enriched"]
+        with enrich.ProffClient() as proff:
+            if new_as_orgnrs:
+                log.info("Enriching %d new ASes via proff.no", len(new_as_orgnrs))
+                summary.enriched += enrich.enrich_orgnrs(conn, new_as_orgnrs, proff=proff)["enriched"]
+            summary.enriched += _enrich_recent_enks(conn, today, proff)
 
         enk_matches = matcher.find_enk_conversions(conn, today=today)
         summary.enk_conversions = len(enk_matches)
